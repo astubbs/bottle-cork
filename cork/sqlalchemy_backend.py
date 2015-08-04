@@ -137,6 +137,16 @@ class SqlAlchemyBackend(base_backend.Backend):
         if not sqlalchemy_available:
             raise RuntimeError("The SQLAlchemy library is not available.")
 
+        _initialize_engine(initialize)
+
+        _initialize_tables(initialize)
+        
+        if initialize:
+            self._initialize_storage(db_name)
+            log.debug("Tables created")
+
+
+    def _intialize_engine(db_full_url, initialize):
         self._metadata = MetaData()
         if initialize:
             # Create new database if needed.
@@ -158,6 +168,7 @@ class SqlAlchemyBackend(base_backend.Backend):
             self._engine = create_engine(db_full_url, encoding='utf-8')
 
 
+    def _initialize_tables(users_tname, roles_tname, pending_reg_tname, initialize):
         self._users = Table(users_tname, self._metadata,
             Column('username', Unicode(128), primary_key=True),
             Column('role', ForeignKey(roles_tname + '.role')),
@@ -185,10 +196,6 @@ class SqlAlchemyBackend(base_backend.Backend):
         self.users = SqlTable(self._engine, self._users, 'username')
         self.roles = SqlSingleValueTable(self._engine, self._roles, 'role', 'level')
         self.pending_registrations = SqlTable(self._engine, self._pending_reg, 'code')
-
-        if initialize:
-            self._initialize_storage(db_name)
-            log.debug("Tables created")
 
 
     def _initialize_storage(self, db_name):
