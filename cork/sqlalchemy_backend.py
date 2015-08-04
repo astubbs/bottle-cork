@@ -169,12 +169,10 @@ class SqlAlchemyBackend(base_backend.Backend):
                 log.info("Failed DB creation: %s" % e)
 
             # Postgres must connect to the specific database
-            if db_url.startswith('postgresql'):
-                isPostgres = True
+            if isPostgres:
                 db_url += '/' + db_name
-                self._engine.raw_connection().set_isolation_level(0)
                 self._engine = create_engine(db_url, encoding='utf-8', echo=echo)
-
+                # new engine so isolation level should be back to default (1)
 
             # SQLite in-memory database URL: "sqlite://:memory:"
             if db_name != ':memory:' and not db_url.startswith('postgresql'):
