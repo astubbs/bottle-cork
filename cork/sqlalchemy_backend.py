@@ -172,6 +172,7 @@ class SqlAlchemyBackend(base_backend.Backend):
             if db_url.startswith('postgresql'):
                 isPostgres = True
                 db_url += '/' + db_name
+                self._engine.raw_connection().set_isolation_level(0)
                 self._engine = create_engine(db_url, encoding='utf-8', echo=echo)
 
 
