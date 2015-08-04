@@ -154,11 +154,25 @@ class SqlAlchemyBackend(base_backend.Backend):
             if is_py3 and db_url.startswith('mysql'):
                 print("WARNING: MySQL is not supported under Python3")
 
+            # Postgres must connect to the specific database
+            if db_url.startswith('postgresql'):
+                isPostgres = True
+                db_url += '/' + db_name
+
             self._engine = create_engine(db_url, encoding='utf-8')
+
+            # Postgresql won't let you create a database in a transaction
+            if isPostgres:
+                self._engine.raw_connection().set_isolation_level(0)
+
             try:
                 self._engine.execute("CREATE DATABASE %s" % db_name)
             except Exception as e:
                 log.info("Failed DB creation: %s" % e)
+
+            # Make sure to set it back to using transactions
+            if isPostgres:
+                self._engine.raw_connection().set_isolation_level(1)
 
             # SQLite in-memory database URL: "sqlite://:memory:"
             if db_name != ':memory:' and not db_url.startswith('postgresql'):
