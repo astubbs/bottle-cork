@@ -132,21 +132,20 @@ class SqlSingleValueTable(SqlTable):
 class SqlAlchemyBackend(base_backend.Backend):
 
     def __init__(self, db_full_url, users_tname='users', roles_tname='roles',
-            pending_reg_tname='register', initialize=False):
-
+            pending_reg_tname='register', initialize=False, echo=False):
         if not sqlalchemy_available:
             raise RuntimeError("The SQLAlchemy library is not available.")
 
-        _initialize_engine(initialize)
+        self._initialize_engine(db_full_url, initialize, echo)
 
-        _initialize_tables(initialize)
-        
+        self._initialize_tables(users_tname, roles_tname, pending_reg_tname)
+
         if initialize:
-            self._initialize_storage(db_name)
+            self._initialize_storage(db_full_url)
             log.debug("Tables created")
 
 
-    def _intialize_engine(db_full_url, initialize):
+    def _initialize_engine(self, db_full_url, initialize, echo):
         self._metadata = MetaData()
         if initialize:
             # Create new database if needed.
@@ -157,9 +156,8 @@ class SqlAlchemyBackend(base_backend.Backend):
             # Postgres must connect to the specific database
             if db_url.startswith('postgresql'):
                 isPostgres = True
-                db_url += '/' + db_name
 
-            self._engine = create_engine(db_url, encoding='utf-8')
+            self._engine = create_engine(db_url, encoding='utf-8', echo=echo)
 
             # Postgresql won't let you create a database in a transaction
             if isPostgres:
@@ -170,20 +168,23 @@ class SqlAlchemyBackend(base_backend.Backend):
             except Exception as e:
                 log.info("Failed DB creation: %s" % e)
 
-            # Make sure to set it back to using transactions
-            if isPostgres:
-                self._engine.raw_connection().set_isolation_level(1)
+            # Postgres must connect to the specific database
+            if db_url.startswith('postgresql'):
+                isPostgres = True
+                db_url += '/' + db_name
+                self._engine = create_engine(db_url, encoding='utf-8', echo=echo)
+
 
             # SQLite in-memory database URL: "sqlite://:memory:"
             if db_name != ':memory:' and not db_url.startswith('postgresql'):
                 self._engine.execute("USE %s" % db_name)
 
         else:
-            self._engine = create_engine(db_full_url, encoding='utf-8')
+            self._engine = create_engine(db_full_url, encoding='utf-8', echo=echo)
 
 
-    def _initialize_tables(users_tname, roles_tname, pending_reg_tname, initialize):
-        self._users = Table(users_tname, self._metadata,
+    def _initialize_tables(self, users_tname, roles_tname, pending_reg_tname):
+        _users = Table(users_tname, self._metadata,
             Column('username', Unicode(128), primary_key=True),
             Column('role', ForeignKey(roles_tname + '.role')),
             Column('hash', String(256), nullable=False),
@@ -193,11 +194,11 @@ class SqlAlchemyBackend(base_backend.Backend):
             Column('last_login', String(128), nullable=False)
 
         )
-        self._roles = Table(roles_tname, self._metadata,
+        _roles = Table(roles_tname, self._metadata,
             Column('role', String(128), primary_key=True),
             Column('level', Integer, nullable=False)
         )
-        self._pending_reg = Table(pending_reg_tname, self._metadata,
+        _pending_reg = Table(pending_reg_tname, self._metadata,
             Column('code', String(128), primary_key=True),
             Column('username', Unicode(128), nullable=False),
             Column('role', ForeignKey(roles_tname + '.role')),
@@ -207,9 +208,9 @@ class SqlAlchemyBackend(base_backend.Backend):
             Column('creation_date', String(128), nullable=False)
         )
 
-        self.users = SqlTable(self._engine, self._users, 'username')
-        self.roles = SqlSingleValueTable(self._engine, self._roles, 'role', 'level')
-        self.pending_registrations = SqlTable(self._engine, self._pending_reg, 'code')
+        self.users = SqlTable(self._engine, _users, 'username')
+        self.roles = SqlSingleValueTable(self._engine, _roles, 'role', 'level')
+        self.pending_registrations = SqlTable(self._engine, _pending_reg, 'code')
 
 
     def _initialize_storage(self, db_name):
